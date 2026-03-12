@@ -3,27 +3,20 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Text.Json;
+using Microsoft.Data.SqlClient;
 
 class Servidor
 {
-    static string archivo = "estudiantes.txt";
+    static string connectionString =
+        "Server=Pcerda;Database=SistemasAvanzadosServidorCliente;Trusted_Connection=True; TrustServerCertificate=True";
 
     static void Main()
     {
         TcpListener servidor = new TcpListener(IPAddress.Any, 5005);
         servidor.Start();
 
-        Console.WriteLine("Servidor iniciado en puerto 5005...\n");
-
-        // Mostrar datos guardados cuando inicia el servidor
-        if (File.Exists(archivo))
-        {
-            Console.WriteLine("Datos almacenados previamente:\n");
-            string contenido = File.ReadAllText(archivo);
-            Console.WriteLine(contenido);
-            Console.WriteLine("---------------------------------\n");
-        }
-
+        Console.WriteLine("Servidor iniciado en puerto 5005...");
         Console.WriteLine("Esperando clientes...\n");
 
         while (true)
@@ -43,17 +36,24 @@ class Servidor
                 Console.WriteLine("JSON recibido:");
                 Console.WriteLine(jsonRecibido);
 
-                // Guardar en archivo TXT
-                Guardar(jsonRecibido);
+                Estudiante? estudiante = JsonSerializer.Deserialize<Estudiante>(jsonRecibido);
 
-                // Mostrar todo el historial guardado
-                Console.WriteLine("\nHistorial de estudiantes:");
-                Console.WriteLine(File.ReadAllText(archivo));
+                string respuesta;
 
-                string respuesta = "Datos recibidos y guardados";
+                if (estudiante != null && Validar(estudiante))
+                {
+                    GuardarEnBaseDatos(estudiante);
+                    respuesta = "Datos guardados en base de datos";
+                }
+                else
+                {
+                    respuesta = "Datos inválidos";
+                }
 
                 byte[] respuestaBytes = Encoding.UTF8.GetBytes(respuesta);
                 stream.Write(respuestaBytes, 0, respuestaBytes.Length);
+
+                MostrarRegistros();
 
                 stream.Close();
                 cliente.Close();
@@ -67,8 +67,57 @@ class Servidor
         }
     }
 
-    static void Guardar(string json)
+    static bool Validar(Estudiante e)
     {
-        File.AppendAllText(archivo, json + Environment.NewLine);
+        return !string.IsNullOrWhiteSpace(e.Nombre)
+               && e.Edad > 0
+               && !string.IsNullOrWhiteSpace(e.Carrera);
     }
+
+    static void GuardarEnBaseDatos(Estudiante estudiante)
+    {
+        using (SqlConnection conexion = new SqlConnection(connectionString))
+        {
+            conexion.Open();
+
+            string query = "INSERT INTO Estudiantes (Nombre, Edad, Carrera) VALUES (@Nombre,@Edad,@Carrera)";
+
+            SqlCommand comando = new SqlCommand(query, conexion);
+            comando.Parameters.AddWithValue("@Nombre", estudiante.Nombre);
+            comando.Parameters.AddWithValue("@Edad", estudiante.Edad);
+            comando.Parameters.AddWithValue("@Carrera", estudiante.Carrera);
+
+            comando.ExecuteNonQuery();
+        }
+    }
+
+    static void MostrarRegistros()
+    {
+        using (SqlConnection conexion = new SqlConnection(connectionString))
+        {
+            conexion.Open();
+
+            string query = "SELECT Nombre, Edad, Carrera FROM Estudiantes";
+
+            SqlCommand comando = new SqlCommand(query, conexion);
+            SqlDataReader reader = comando.ExecuteReader();
+
+            Console.WriteLine("\nEstudiantes guardados en la base de datos:\n");
+
+            while (reader.Read())
+            {
+                Console.WriteLine(
+                    reader["Nombre"] + " | " +
+                    reader["Edad"] + " | " +
+                    reader["Carrera"]);
+            }
+        }
+    }
+}
+
+class Estudiante
+{
+    public string Nombre { get; set; } = "";
+    public int Edad { get; set; }
+    public string Carrera { get; set; } = "";
 }
