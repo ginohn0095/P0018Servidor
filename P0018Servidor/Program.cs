@@ -1,5 +1,4 @@
 ﻿using System;
-using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -9,7 +8,7 @@ using Microsoft.Data.SqlClient;
 class Servidor
 {
     static string connectionString =
-        "Server=Pcerda;Database=SistemasAvanzadosServidorCliente;Trusted_Connection=True; TrustServerCertificate=True";
+        "Server=Pcerda;Database=SocketsBD;Trusted_Connection=True; TrustServerCertificate=True";
 
     static void Main()
     {
@@ -36,14 +35,14 @@ class Servidor
                 Console.WriteLine("JSON recibido:");
                 Console.WriteLine(jsonRecibido);
 
-                Estudiante? estudiante = JsonSerializer.Deserialize<Estudiante>(jsonRecibido);
+                Usuario? usuario = JsonSerializer.Deserialize<Usuario>(jsonRecibido);
 
                 string respuesta;
 
-                if (estudiante != null && Validar(estudiante))
+                if (usuario != null && Validar(usuario))
                 {
-                    GuardarEnBaseDatos(estudiante);
-                    respuesta = "Datos guardados en base de datos";
+                    GuardarEnBaseDatos(usuario);
+                    respuesta = "Usuario guardado en base de datos";
                 }
                 else
                 {
@@ -67,25 +66,31 @@ class Servidor
         }
     }
 
-    static bool Validar(Estudiante e)
+    static bool Validar(Usuario u)
     {
-        return !string.IsNullOrWhiteSpace(e.Nombre)
-               && e.Edad > 0
-               && !string.IsNullOrWhiteSpace(e.Carrera);
+        return !string.IsNullOrWhiteSpace(u.Nombre)
+               && u.Edad > 0
+               && !string.IsNullOrWhiteSpace(u.Correo)
+               && !string.IsNullOrWhiteSpace(u.Ciudad)
+               && !string.IsNullOrWhiteSpace(u.Telefono);
     }
 
-    static void GuardarEnBaseDatos(Estudiante estudiante)
+    static void GuardarEnBaseDatos(Usuario usuario)
     {
         using (SqlConnection conexion = new SqlConnection(connectionString))
         {
             conexion.Open();
 
-            string query = "INSERT INTO Estudiantes (Nombre, Edad, Carrera) VALUES (@Nombre,@Edad,@Carrera)";
+            string query = @"INSERT INTO Usuarios 
+                            (Nombre, Edad, Correo, Ciudad, Telefono) 
+                            VALUES (@Nombre,@Edad,@Correo,@Ciudad,@Telefono)";
 
             SqlCommand comando = new SqlCommand(query, conexion);
-            comando.Parameters.AddWithValue("@Nombre", estudiante.Nombre);
-            comando.Parameters.AddWithValue("@Edad", estudiante.Edad);
-            comando.Parameters.AddWithValue("@Carrera", estudiante.Carrera);
+            comando.Parameters.AddWithValue("@Nombre", usuario.Nombre);
+            comando.Parameters.AddWithValue("@Edad", usuario.Edad);
+            comando.Parameters.AddWithValue("@Correo", usuario.Correo);
+            comando.Parameters.AddWithValue("@Ciudad", usuario.Ciudad);
+            comando.Parameters.AddWithValue("@Telefono", usuario.Telefono);
 
             comando.ExecuteNonQuery();
         }
@@ -97,27 +102,31 @@ class Servidor
         {
             conexion.Open();
 
-            string query = "SELECT Nombre, Edad, Carrera FROM Estudiantes";
+            string query = "SELECT Nombre, Edad, Correo, Ciudad, Telefono FROM Usuarios";
 
             SqlCommand comando = new SqlCommand(query, conexion);
             SqlDataReader reader = comando.ExecuteReader();
 
-            Console.WriteLine("\nEstudiantes guardados en la base de datos:\n");
+            Console.WriteLine("\nUsuarios guardados en la base de datos:\n");
 
             while (reader.Read())
             {
                 Console.WriteLine(
                     reader["Nombre"] + " | " +
                     reader["Edad"] + " | " +
-                    reader["Carrera"]);
+                    reader["Correo"] + " | " +
+                    reader["Ciudad"] + " | " +
+                    reader["Telefono"]);
             }
         }
     }
 }
 
-class Estudiante
+class Usuario
 {
-    public string Nombre { get; set; } = "";
+    public string Nombre { get; set; } = string.Empty;
     public int Edad { get; set; }
-    public string Carrera { get; set; } = "";
+    public string Correo { get; set; } = string.Empty;
+    public string Ciudad { get; set; } = string.Empty;
+    public string Telefono { get; set; } = string.Empty;
 }
